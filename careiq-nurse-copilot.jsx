@@ -783,7 +783,27 @@ const DEMO_HANDOFF = {
   },
 };
 
-const ANALYSIS_PROMPT = `You are CareIQ, a clinical decision-support system for home healthcare nurses in India.
+const SPECIAL_CHAR_ESCAPE_MAP = {
+  '"': '\\"',
+  "\\": "\\\\",
+  "\b": "\\b",
+  "\f": "\\f",
+  "\n": "\\n",
+  "\r": "\\r",
+  "\t": "\\t",
+};
+
+function sanitizeSystemPrompt(promptText) {
+  return String(promptText).replace(/[\\"\u0000-\u001F\u2028\u2029]/g, (char) => {
+    if (SPECIAL_CHAR_ESCAPE_MAP[char]) {
+      return SPECIAL_CHAR_ESCAPE_MAP[char];
+    }
+    const codePoint = char.charCodeAt(0).toString(16).padStart(4, "0");
+    return `\\u${codePoint}`;
+  });
+}
+
+const ANALYSIS_PROMPT = sanitizeSystemPrompt(`You are CareIQ, a clinical decision-support system for home healthcare nurses in India.
 Analyze the nurse's visit data and produce a structured clinical assessment.
 
 Only extract information that is directly stated or clearly implied in the nurse notes and vitals.
@@ -816,9 +836,9 @@ Use this exact schema:
     "reason": "string",
     "escalate_to": "physician|specialist|emergency"
   }
-}`;
+}`);
 
-const CARE_PLAN_PROMPT = `You are CareIQ. Based on the clinical assessment provided, generate a structured 7-day care plan.
+const CARE_PLAN_PROMPT = sanitizeSystemPrompt(`You are CareIQ. Based on the clinical assessment provided, generate a structured 7-day care plan.
 
 Respond with ONLY valid JSON:
 {
@@ -831,9 +851,9 @@ Respond with ONLY valid JSON:
   "monitoring_parameters": [{"parameter":"string","frequency":"string","alert_threshold":"string"}],
   "patient_education": ["string"],
   "follow_up": {"next_visit":"string","teleconsult":"string","lab_tests":"string"}
-}`;
+}`);
 
-const HANDOFF_PROMPT = `You are CareIQ. Generate a concise clinical shift handoff summary using SBAR format.
+const HANDOFF_PROMPT = sanitizeSystemPrompt(`You are CareIQ. Generate a concise clinical shift handoff summary using SBAR format.
 
 Respond with ONLY valid JSON:
 {
@@ -846,7 +866,7 @@ Respond with ONLY valid JSON:
   "critical_alerts": ["string"],
   "pending_tasks": ["string"],
   "family_notes": "string"
-}`;
+}`);
 
 function severityFromRiskScore(score) {
   if (score >= 80) return "critical";
@@ -1086,10 +1106,13 @@ function App() {
     const startedAt = Date.now();
 
     try {
+      const bodyStr = JSON.stringify(requestBody);
+      JSON.parse(bodyStr); // validate before sending
+
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(requestBody, null, 0),
       });
 
       const payload = await response.json();
