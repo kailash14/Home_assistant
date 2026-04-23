@@ -783,70 +783,68 @@ const DEMO_HANDOFF = {
   },
 };
 
-const ANALYSIS_PROMPT = `You are CareIQ, a clinical decision-support system for home healthcare nurses in India.
-Analyze the nurse's visit data and produce a structured clinical assessment.
+const ANALYSIS_PROMPT =
+  "You are CareIQ, a clinical decision-support system for home healthcare nurses in India.\n" +
+  "Analyze the nurse's visit data and produce a structured clinical assessment.\n\n" +
+  "Only extract information that is directly stated or clearly implied in the nurse notes and vitals.\n" +
+  "If a vital is missing, state that it was not recorded and discuss clinical significance of the gap.\n\n" +
+  "Respond with ONLY valid JSON. No markdown fences, no preamble, no explanation.\n\n" +
+  "Use this exact schema:\n" +
+  "{\n" +
+  "  \"patient_summary\": \"string - 2-3 line clinical summary of current visit\",\n" +
+  "  \"extracted_entities\": {\n" +
+  "    \"symptoms\": [{\"symptom\":\"string\",\"duration\":\"string\",\"severity\":\"mild|moderate|severe\"}],\n" +
+  "    \"medications_current\": [{\"name\":\"string\",\"dose\":\"string\",\"frequency\":\"string\"}],\n" +
+  "    \"medications_stopped\": [{\"name\":\"string\",\"reason\":\"string\",\"days_ago\":0}],\n" +
+  "    \"conditions_active\": [\"string\"],\n" +
+  "    \"social_determinants\": [\"string\"]\n" +
+  "  },\n" +
+  "  \"risk_flags\": [\n" +
+  "    {\"title\":\"string\",\"severity\":\"critical|high|medium|low\",\"explanation\":\"string - clinical rationale in 1-2 sentences\",\"action\":\"string - specific recommended next step\"}\n" +
+  "  ],\n" +
+  "  \"vitals_assessment\": [\n" +
+  "    {\"vital\":\"string\",\"value\":\"string\",\"status\":\"normal|elevated|low|critical\",\"note\":\"string\"}\n" +
+  "  ],\n" +
+  "  \"care_actions\": [\n" +
+  "    {\"priority\":\"immediate|today|this_week\",\"action\":\"string\",\"owner\":\"nurse|doctor|coordinator|family\"}\n" +
+  "  ],\n" +
+  "  \"escalation\": {\n" +
+  "    \"needed\": true,\n" +
+  "    \"urgency\": \"immediate|within_4hrs|within_24hrs|routine\",\n" +
+  "    \"reason\": \"string\",\n" +
+  "    \"escalate_to\": \"physician|specialist|emergency\"\n" +
+  "  }\n" +
+  "}";
 
-Only extract information that is directly stated or clearly implied in the nurse notes and vitals.
-If a vital is missing, state that it was not recorded and discuss clinical significance of the gap.
+const CARE_PLAN_PROMPT =
+  "You are CareIQ. Based on the clinical assessment provided, generate a structured 7-day care plan.\n\n" +
+  "Respond with ONLY valid JSON:\n" +
+  "{\n" +
+  "  \"care_plan_title\": \"string\",\n" +
+  "  \"goals\": [{\"goal\":\"string\",\"target\":\"string\",\"timeline\":\"string\"}],\n" +
+  "  \"daily_schedule\": [\n" +
+  "    {\"day\":\"Day 1-2|Day 3-4|Day 5-7\",\"tasks\":[{\"time\":\"string\",\"task\":\"string\",\"owner\":\"nurse|doctor|patient|family\",\"notes\":\"string\"}]}\n" +
+  "  ],\n" +
+  "  \"medication_changes\": [{\"medication\":\"string\",\"change\":\"string\",\"reason\":\"string\"}],\n" +
+  "  \"monitoring_parameters\": [{\"parameter\":\"string\",\"frequency\":\"string\",\"alert_threshold\":\"string\"}],\n" +
+  "  \"patient_education\": [\"string\"],\n" +
+  "  \"follow_up\": {\"next_visit\":\"string\",\"teleconsult\":\"string\",\"lab_tests\":\"string\"}\n" +
+  "}";
 
-Respond with ONLY valid JSON. No markdown fences, no preamble, no explanation.
-
-Use this exact schema:
-{
-  "patient_summary": "string - 2-3 line clinical summary of current visit",
-  "extracted_entities": {
-    "symptoms": [{"symptom":"string","duration":"string","severity":"mild|moderate|severe"}],
-    "medications_current": [{"name":"string","dose":"string","frequency":"string"}],
-    "medications_stopped": [{"name":"string","reason":"string","days_ago":0}],
-    "conditions_active": ["string"],
-    "social_determinants": ["string"]
-  },
-  "risk_flags": [
-    {"title":"string","severity":"critical|high|medium|low","explanation":"string - clinical rationale in 1-2 sentences","action":"string - specific recommended next step"}
-  ],
-  "vitals_assessment": [
-    {"vital":"string","value":"string","status":"normal|elevated|low|critical","note":"string"}
-  ],
-  "care_actions": [
-    {"priority":"immediate|today|this_week","action":"string","owner":"nurse|doctor|coordinator|family"}
-  ],
-  "escalation": {
-    "needed": true,
-    "urgency": "immediate|within_4hrs|within_24hrs|routine",
-    "reason": "string",
-    "escalate_to": "physician|specialist|emergency"
-  }
-}`;
-
-const CARE_PLAN_PROMPT = `You are CareIQ. Based on the clinical assessment provided, generate a structured 7-day care plan.
-
-Respond with ONLY valid JSON:
-{
-  "care_plan_title": "string",
-  "goals": [{"goal":"string","target":"string","timeline":"string"}],
-  "daily_schedule": [
-    {"day":"Day 1-2|Day 3-4|Day 5-7","tasks":[{"time":"string","task":"string","owner":"nurse|doctor|patient|family","notes":"string"}]}
-  ],
-  "medication_changes": [{"medication":"string","change":"string","reason":"string"}],
-  "monitoring_parameters": [{"parameter":"string","frequency":"string","alert_threshold":"string"}],
-  "patient_education": ["string"],
-  "follow_up": {"next_visit":"string","teleconsult":"string","lab_tests":"string"}
-}`;
-
-const HANDOFF_PROMPT = `You are CareIQ. Generate a concise clinical shift handoff summary using SBAR format.
-
-Respond with ONLY valid JSON:
-{
-  "sbar": {
-    "situation": "string - current clinical status in 2-3 sentences",
-    "background": "string - relevant history and recent changes",
-    "assessment": "string - clinical judgment and risk level",
-    "recommendation": "string - priority actions for incoming nurse"
-  },
-  "critical_alerts": ["string"],
-  "pending_tasks": ["string"],
-  "family_notes": "string"
-}`;
+const HANDOFF_PROMPT =
+  "You are CareIQ. Generate a concise clinical shift handoff summary using SBAR format.\n\n" +
+  "Respond with ONLY valid JSON:\n" +
+  "{\n" +
+  "  \"sbar\": {\n" +
+  "    \"situation\": \"string - current clinical status in 2-3 sentences\",\n" +
+  "    \"background\": \"string - relevant history and recent changes\",\n" +
+  "    \"assessment\": \"string - clinical judgment and risk level\",\n" +
+  "    \"recommendation\": \"string - priority actions for incoming nurse\"\n" +
+  "  },\n" +
+  "  \"critical_alerts\": [\"string\"],\n" +
+  "  \"pending_tasks\": [\"string\"],\n" +
+  "  \"family_notes\": \"string\"\n" +
+  "}";
 
 function severityFromRiskScore(score) {
   if (score >= 80) return "critical";
@@ -1078,7 +1076,7 @@ function App() {
 
   async function callClaude({ actionName, systemPrompt, userContent, maxTokens }) {
     const requestBody = {
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: "user", content: userContent }],
@@ -1086,7 +1084,7 @@ function App() {
     const startedAt = Date.now();
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("https://careiq-proxy.onrender.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
