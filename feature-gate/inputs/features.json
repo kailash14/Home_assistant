@@ -1,0 +1,66 @@
+[
+  {
+    "id": "FR-001",
+    "title": "AI-powered interviewer coaching during live interviews",
+    "description": "Real-time prompts and follow-up question suggestions for hiring managers during live video interviews, based on candidate responses.",
+    "source": "founder",
+    "submitted_by": "CEO",
+    "raw_brief": "Every interviewer is asking for this. The market is moving toward real-time AI assistance and we are falling behind. This will dramatically improve interview quality and become our key differentiator. We think it could increase enterprise deal close rates by 30%. Engineering says it should be straightforward since we already have the transcription pipeline."
+  },
+  {
+    "id": "FR-002",
+    "title": "Bias detection in interviewer questions",
+    "description": "Post-interview analysis flagging interviewer questions that may introduce bias, with an audit log and reviewer dashboard.",
+    "source": "customer:Acme Corp (Fortune 500)",
+    "submitted_by": "Head of TA at Acme",
+    "raw_brief": "Acme legal needs this for NYC AEDT compliance starting Q1. Three other enterprise prospects (Globex, Initech, Umbrella) cited bias detection as a required feature in lost-deal post-mortems Q3. Internal data: 40% of our active enterprise customers operate in NYC, IL, or Colorado. Compliance team has prior bias eval framework from the candidate-screening feature we can extend."
+  },
+  {
+    "id": "FR-003",
+    "title": "Auto-source candidates from LinkedIn",
+    "description": "Scrape LinkedIn profiles matching a JD and auto-populate the candidate pipeline.",
+    "source": "sales",
+    "submitted_by": "VP Sales",
+    "raw_brief": "Sales says we are losing deals because competitors offer sourcing. Customers want a one-stop shop. This will unlock significant ACV expansion. We think it should be a fast build since LinkedIn data is widely available."
+  },
+  {
+    "id": "FR-004",
+    "title": "Slack integration for interview summaries",
+    "description": "Push AI-generated interview summary cards into the hiring channel after each interview.",
+    "source": "customer:Globex",
+    "submitted_by": "Engineering Manager",
+    "raw_brief": "One customer asked. Would be nice to have. Probably small."
+  },
+  {
+    "id": "FR-005",
+    "title": "Multi-language support for interviews (Spanish, Portuguese, German, French)",
+    "description": "Transcription, summarization, and bias detection in 4 additional languages.",
+    "source": "sales",
+    "submitted_by": "Sales Engineering",
+    "raw_brief": "Multiple deals in EU and LATAM are blocked on this. Sales believes this opens up a $50M TAM. Translation APIs are commodity now so it should be quick."
+  },
+  {
+    "id": "FR-006",
+    "title": "Customizable interview scorecards per role family",
+    "description": "Allow customers to define their own scorecard rubrics by role family (eng, design, PM, sales) and have the AI summarizer score against them.",
+    "source": "customer:multiple (7 named in support tickets)",
+    "submitted_by": "Customer Success",
+    "raw_brief": "Seven enterprise customers (named in linked support tickets) have submitted formal requests in the last 90 days. Three are threatening churn renewal if not delivered by Q2. Internal usage data: 62% of customers have asked CS for rubric customization in onboarding. Existing scorecard schema in Cosmos can be extended with a custom_fields collection."
+  },
+  {
+    "id": "FR-007",
+    "title": "Free public Chrome extension for candidates to practice interviews",
+    "description": "Standalone consumer Chrome extension that lets job candidates practice with our AI interviewer for free, with the goal of building brand awareness.",
+    "source": "founder",
+    "submitted_by": "CEO",
+    "raw_brief": "I think this could be a huge growth lever. Imagine every candidate using our brand before they even apply somewhere. We could go viral. It feels like the right move for the moment."
+  },
+  {
+    "id": "FR-008",
+    "title": "Audit log export for compliance teams",
+    "description": "Export all AI decisions, flags, and human overrides as a CSV/JSON bundle on a configurable schedule, signed and timestamped.",
+    "source": "customer:CrowdStrike (named ISO 42001 audit prep)",
+    "submitted_by": "Security & Compliance Lead",
+    "raw_brief": "CrowdStrike compliance team requires this for their ISO 42001 audit in March. Two other enterprise customers (Forter, Impartner) have asked for similar in the last 60 days. Required for ISO 42001 controls A.6.2.6 and A.8.4. Audit log infrastructure already exists; this is an export and signing layer on top."
+  }
+]
