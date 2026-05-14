@@ -474,7 +474,7 @@ function App() {
     }
   };
 
-  const generateCarePlan = async () => {
+ const generateCarePlan = async () => {
     if (carePlan) return setCarePlanByPatient((p) => ({ ...p, [selectedPatientId]: null }));
     setErrorMessage("");
 
@@ -486,12 +486,13 @@ function App() {
     
     setIsGenerating(true);
     try {
-      const system = "You are a clinical AI. Output ONLY raw JSON matching the requested schema.";
+      const system = "You are a clinical AI. Output ONLY raw JSON matching the requested schema. CRITICAL JSON RULES: 1. Do NOT use double quotes inside your text values. Use single quotes ('') instead to prevent breaking the JSON. 2. Ensure every object in an array is properly separated by a comma. 3. Do not include trailing commas.";
+      
       const prompt = `Act as an expert caregiver. Generate a highly detailed, step-by-step 7-day care plan based on these inputs:\n${getPatientContextStr()}\n
       Make the tasks highly actionable, specific, and broken down step-by-step.
       CRITICAL: You MUST explicitly cover all 7 days in the daily_schedule array (e.g., "Days 1-2", "Days 3-5", "Days 6-7"). Do not leave out any days.
       
-      Return JSON exactly like this:
+      Return JSON exactly like this without any markdown formatting:
       {
         "care_plan_title": "...",
         "goals": [{"goal": "...", "target": "...", "timeline": "..."}],
