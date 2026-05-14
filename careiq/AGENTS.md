@@ -30,3 +30,7 @@ There is no database, Redis, or Docker dependency. All patient data is static in
 - There is no test suite configured (no `jest`, `vitest`, or similar). Validation is done via `npm run lint` and `npm run build` (TypeScript strict mode).
 - Manual testing: use "Load Demo Data" button to test the full UI flow without an API key.
 - The three API routes (`/api/analyze`, `/api/care-plan`, `/api/handoff`) can be tested with curl if `ANTHROPIC_API_KEY` is set.
+
+### Known gotcha: model availability
+
+The code references model `claude-sonnet-4-20250514` in `src/lib/anthropic.ts`. If this model is not available in your Anthropic account, live AI calls will return a 404 error. The "Load Demo Data" fallback always works regardless. If you need live AI, check and update the model ID in `src/lib/anthropic.ts`.
