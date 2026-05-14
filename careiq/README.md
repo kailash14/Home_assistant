@@ -102,6 +102,91 @@ Input: `{ analysis }` → Output: 7-day care plan with goals, schedule, monitori
 ### POST /api/handoff
 Input: `{ patient, notes, riskFlags }` → Output: SBAR summary with critical alerts and pending tasks
 
+## Deployment
+
+### Option 1 — Vercel (recommended, 5 minutes)
+
+Vercel is built by the Next.js team; zero-config, free tier, automatic HTTPS, global CDN.
+
+**Step 1 — Push to GitHub**
+
+Make sure your code is pushed to a GitHub repository (public or private).
+
+**Step 2 — Import to Vercel**
+
+1. Go to [vercel.com/new](https://vercel.com/new) and click **"Add New Project"**.
+2. Connect your GitHub account and select this repository.
+3. In the **"Configure Project"** screen, expand **"Root Directory"** and type `careiq` (the app lives in the `careiq/` subdirectory, not the repo root).
+4. Vercel will auto-detect Next.js — leave Framework Preset as **Next.js**.
+
+**Step 3 — Set the environment variable**
+
+In the same "Configure Project" screen, under **"Environment Variables"**:
+
+| Name | Value |
+|------|-------|
+| `ANTHROPIC_API_KEY` | `sk-ant-api03-...` (your key from [console.anthropic.com](https://console.anthropic.com/)) |
+
+**Step 4 — Deploy**
+
+Click **"Deploy"**. Vercel will install, build, and deploy in ~1 minute. Your app will be live at `https://<your-project>.vercel.app`.
+
+**Subsequent deploys** are automatic on every `git push` to `main`.
+
+---
+
+### Option 2 — Railway
+
+Railway is a good choice if you prefer container-based hosting with a simple UI.
+
+1. Go to [railway.app](https://railway.app) → **New Project → Deploy from GitHub repo**.
+2. Select this repository.
+3. Set **Root Directory** to `careiq`.
+4. Under **Variables**, add `ANTHROPIC_API_KEY`.
+5. Railway will run `npm run build && npm run start` automatically.
+
+---
+
+### Option 3 — Render
+
+1. Go to [render.com](https://render.com) → **New → Web Service**.
+2. Connect your GitHub repository, set **Root Directory** to `careiq`.
+3. Set:
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm run start`
+4. Add `ANTHROPIC_API_KEY` in the **Environment** tab.
+5. Click **Create Web Service**.
+
+---
+
+### Option 4 — Docker (self-hosted)
+
+A `Dockerfile` with multi-stage build (deps → builder → runner) is included. It uses Next.js [standalone output](https://nextjs.org/docs/app/api-reference/config/next-config-js/output) for a minimal container image.
+
+```bash
+# Build the image
+docker build -t careiq .
+
+# Run locally (replace the key value)
+docker run -p 3000:3000 -e ANTHROPIC_API_KEY=sk-ant-api03-... careiq
+```
+
+Open `http://localhost:3000`.
+
+For production, deploy this image to any container platform (GCP Cloud Run, AWS ECS, Azure Container Apps, fly.io, etc.) and set `ANTHROPIC_API_KEY` as a secret environment variable in that platform's UI.
+
+---
+
+### Environment Variables Reference
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | Yes (for live AI) | Your Anthropic API key. Without it, the UI still works in **Demo Mode** (pre-computed results). Get one at [console.anthropic.com](https://console.anthropic.com/). |
+
+> **Security note:** `ANTHROPIC_API_KEY` is used only in server-side API routes (`/api/analyze`, `/api/care-plan`, `/api/handoff`). It is never exposed to the browser.
+
+---
+
 ## Cost Economics
 
 ~₹4.3 per visit (3 API calls, ~2,500 input + ~1,900 output tokens). At 10,000 monthly visits: ~₹43,000/month in AI costs.
