@@ -225,7 +225,7 @@ const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
-      "anthropic-dangerously-allow-browser": "true" 
+      "anthropic-dangerous-direct-browser-access": "true" 
     },
     body: JSON.stringify({
       model: "claude-3-haiku-20240307", 
