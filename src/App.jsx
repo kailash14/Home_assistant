@@ -206,7 +206,6 @@ function vitalStatus(key, v) {
 }
 
 // ── DYNAMIC DEMO DATA GENERATORS ──
-// These make the UI feel real-time even without an API Key
 const generateMockAnalysis = (patient, vitals, notes) => ({
   patient_summary: `${patient.age}${
     patient.gender
@@ -232,7 +231,10 @@ const generateMockAnalysis = (patient, vitals, notes) => ({
       explanation: `Blood pressure currently measured at ${
         vitals.bp_sys || "--"
       }/${vitals.bp_dia || "--"}.`,
-      action: "Monitor closely based on protocols.",
+      action:
+        normalizeStatus(vitalStatus("bp_sys", vitals.bp_sys)) === "critical"
+          ? "Immediate Checkpoint: Loop in the doctor - Monitor closely based on protocols."
+          : "Monitor closely based on protocols.",
     },
   ],
   vitals_assessment: [
@@ -271,23 +273,68 @@ const generateMockAnalysis = (patient, vitals, notes) => ({
 });
 
 const generateMockCarePlan = (vitals) => ({
-  care_plan_title: "Dynamic Observation Plan",
+  care_plan_title: "Expert 7-Day Stabilization & Care Plan",
   goals: [
     {
-      goal: "Maintain stability",
+      goal: "Hemodynamic Stability",
       target: `BP < 140/90`,
-      timeline: "Next 7 days",
+      timeline: "Days 1-3",
+    },
+    {
+      goal: "Symptom Control",
+      target: "No acute distress reported",
+      timeline: "Days 4-7",
     },
   ],
   daily_schedule: [
     {
-      day: "Day 1-2",
+      day: "Days 1-2: Acute Monitoring",
       tasks: [
         {
           time: "Morning",
-          task: "Review vitals",
+          task: "Step 1: Check resting vitals. Step 2: Administer morning medications. Step 3: Assess for edema or discomfort.",
           owner: "nurse",
-          notes: "Check against baselines",
+          notes: "Log all findings immediately.",
+        },
+        {
+          time: "Evening",
+          task: "Step 1: Review dietary intake. Step 2: Ensure sleep hygiene protocol is followed.",
+          owner: "family",
+          notes: "Keep patient upright if experiencing breathlessness.",
+        },
+      ],
+    },
+    {
+      day: "Days 3-5: Transition & Education",
+      tasks: [
+        {
+          time: "Morning",
+          task: "Step 1: Re-assess vitals. Step 2: Educate patient on medication adherence.",
+          owner: "nurse",
+          notes: "Ensure patient understands the routine.",
+        },
+        {
+          time: "Afternoon",
+          task: "Step 1: Conduct 15-min guided mobility exercise. Step 2: Check skin and wound integrity.",
+          owner: "coordinator",
+          notes: "Stop if patient reports fatigue.",
+        },
+      ],
+    },
+    {
+      day: "Days 6-7: Maintenance & Review",
+      tasks: [
+        {
+          time: "Morning",
+          task: "Step 1: Final weekly vital check. Step 2: Prepare report for physician review.",
+          owner: "nurse",
+          notes: "Compile all logs.",
+        },
+        {
+          time: "Evening",
+          task: "Step 1: Confirm follow-up appointment. Step 2: Restock medications.",
+          owner: "family",
+          notes: "Verify teleconsult link.",
         },
       ],
     },
@@ -295,15 +342,23 @@ const generateMockCarePlan = (vitals) => ({
   monitoring_parameters: [
     {
       parameter: "Blood Pressure",
-      frequency: "Daily",
-      alert_threshold: ">160/100",
+      frequency: "Twice Daily",
+      alert_threshold: ">160/100 mmHg",
+    },
+    {
+      parameter: "Weight",
+      frequency: "Daily morning",
+      alert_threshold: "+2kg in 48hrs",
     },
   ],
-  patient_education: ["Continue prescribed medications."],
+  patient_education: [
+    "Strictly adhere to the medication timeline.",
+    "Immediately report sudden dizziness, chest pain, or severe breathlessness.",
+  ],
   follow_up: {
     next_visit: "Within 48 hours",
-    teleconsult: "As needed",
-    lab_tests: "None immediate",
+    teleconsult: "Scheduled for Day 3",
+    lab_tests: "Basic Metabolic Panel",
   },
 });
 
@@ -343,8 +398,6 @@ function buildCarePlanText(patient, plan) {
 
 // ── CLAUDE API INTEGRATION ──
 const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
-  // If useProxy is true, it routes through Netlify.
-  // If false, it hits Anthropic directly (requires browser CORS extension locally).
   const url = useProxy
     ? "/api/anthropic/v1/messages"
     : "https://api.anthropic.com/v1/messages";
@@ -359,7 +412,7 @@ const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
     },
     body: JSON.stringify({
       model: "claude-3-haiku-20240307",
-      max_tokens: 1500,
+      max_tokens: 2000,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
       temperature: 0.1,
@@ -368,7 +421,6 @@ const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
 
   if (!res.ok) {
     const errText = await res.text();
-    // Catch HTML error pages (like the Nginx 405)
     if (errText.includes("<html>")) {
       throw new Error(
         `API Error ${res.status}: Proxy Error or CORS blocked. See settings.`
@@ -530,6 +582,27 @@ function VitalInput({ label, value, onChange, unit, statusKey }) {
   );
 }
 
+const SharePill = ({ label, icon, onClick, bg }) => (
+  <button
+    onClick={onClick}
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "6px 12px",
+      borderRadius: 20,
+      border: "none",
+      cursor: "pointer",
+      background: bg,
+      color: "white",
+      fontWeight: 700,
+      fontSize: 12,
+    }}
+  >
+    <span style={{ fontSize: 14 }}>{icon}</span> {label}
+  </button>
+);
+
 function HandoffModal({ patient, onClose, onConfirm }) {
   const [selectedNurse, setSelectedNurse] = useState(null);
   const [sending, setSending] = useState(false);
@@ -537,7 +610,7 @@ function HandoffModal({ patient, onClose, onConfirm }) {
   const handleSend = () => {
     if (!selectedNurse) return;
     setSending(true);
-    setTimeout(() => onConfirm(selectedNurse), 1000);
+    setTimeout(() => onConfirm(selectedNurse), 1500);
   };
 
   return (
@@ -645,6 +718,25 @@ function HandoffModal({ patient, onClose, onConfirm }) {
             );
           })}
         </div>
+
+        {selectedNurse && !sending && (
+          <div
+            style={{
+              background: "#F0FDF4",
+              border: "1px solid #86EFAC",
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 16,
+              fontSize: 13,
+              color: "#065F46",
+            }}
+          >
+            The SBAR notes will be automatically shared with{" "}
+            <strong>{selectedNurse.name}</strong> via WhatsApp (+
+            {selectedNurse.phone}) and Telegram.
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 10 }}>
           <button
             onClick={handleSend}
@@ -661,7 +753,7 @@ function HandoffModal({ patient, onClose, onConfirm }) {
               fontWeight: 700,
             }}
           >
-            {sending ? "Sending..." : "Confirm & Send"}
+            {sending ? "Sending via WhatsApp & Telegram..." : "Confirm & Send"}
           </button>
         </div>
       </div>
@@ -681,7 +773,7 @@ function App() {
 
   // AI States
   const [apiKey, setApiKey] = useState("");
-  const [useProxy, setUseProxy] = useState(false); // TOGGLE for Netlify Proxy
+  const [useProxy, setUseProxy] = useState(true); // Default to true since user is on Netlify!
   const [isGenerating, setIsGenerating] = useState(false);
   const [analysisByPatient, setAnalysisByPatient] = useState({});
   const [carePlanByPatient, setCarePlanByPatient] = useState({});
@@ -779,17 +871,20 @@ function App() {
     try {
       const system =
         "You are a clinical AI. Output ONLY raw JSON matching the requested schema. No markdown formatting.";
-      const prompt = `Analyze this patient visit and extract insights based EXACTLY on these inputs:\n${getPatientContextStr()}\n
+      const prompt = `Analyze this patient visit and extract highly detailed clinical insights based EXACTLY on these inputs:\n${getPatientContextStr()}\n
+      CRITICAL INSTRUCTION: If any risk flag is determined to be "critical" or "obese", you MUST prepend the action string with "Immediate Checkpoint: Loop in the doctor - " followed by the specific action.
+      Make the patient summary comprehensive.
+      
       Return JSON exactly like this:
       {
-        "patient_summary": "Brief clinical summary",
+        "patient_summary": "Highly detailed clinical summary...",
         "extracted_entities": {
           "symptoms": [{"symptom": "...", "duration": "...", "severity": "mild|moderate|severe"}],
           "medications_current": [{"name":"...", "dose":"...", "frequency":"..."}],
           "medications_stopped": [{"name":"...", "reason":"...", "days_ago": number}]
         },
-        "risk_flags": [{"title": "...", "severity": "low|medium|high|critical", "explanation": "...", "action": "..."}],
-        "vitals_assessment": [{"vital": "...", "value": "...", "status": "normal|elevated|low|critical|high|obese", "note": "..."}],
+        "risk_flags": [{"title": "...", "severity": "low|medium|high|critical", "explanation": "Detailed explanation...", "action": "Immediate Checkpoint: Loop in the doctor - [action details] (if critical) OR [action details]" }],
+        "vitals_assessment": [{"vital": "...", "value": "...", "status": "normal|elevated|low|critical|high|obese", "note": "Detailed note..."}],
         "care_actions": [{"priority": "today|this_week|immediate", "action": "...", "owner": "nurse|doctor|coordinator"}],
         "escalation": {"needed": boolean, "urgency": "...", "reason": "...", "escalate_to": "physician|ER"}
       }`;
@@ -833,12 +928,19 @@ function App() {
     try {
       const system =
         "You are a clinical AI. Output ONLY raw JSON matching the requested schema.";
-      const prompt = `Generate a 7-day care plan based on these inputs:\n${getPatientContextStr()}\n
+      const prompt = `Act as an expert caregiver. Generate a highly detailed, step-by-step 7-day care plan based on these inputs:\n${getPatientContextStr()}\n
+      Make the tasks highly actionable, specific, and broken down step-by-step.
+      CRITICAL: You MUST explicitly cover all 7 days in the daily_schedule array (e.g., "Days 1-2", "Days 3-5", "Days 6-7"). Do not leave out any days.
+      
       Return JSON exactly like this:
       {
         "care_plan_title": "...",
         "goals": [{"goal": "...", "target": "...", "timeline": "..."}],
-        "daily_schedule": [{"day": "Day 1-2", "tasks": [{"time": "Morning", "task": "...", "owner": "nurse|doctor|patient", "notes": "..."}]}],
+        "daily_schedule": [
+          {"day": "Days 1-2", "tasks": [{"time": "Morning", "task": "Step 1: ... Step 2: ... Step 3: ...", "owner": "nurse|doctor|patient", "notes": "..."}]},
+          {"day": "Days 3-5", "tasks": [{"time": "Afternoon", "task": "Step 1: ...", "owner": "...", "notes": "..."}]},
+          {"day": "Days 6-7", "tasks": [{"time": "Evening", "task": "Step 1: ...", "owner": "...", "notes": "..."}]}
+        ],
         "monitoring_parameters": [{"parameter": "...", "frequency": "...", "alert_threshold": "..."}],
         "patient_education": ["..."],
         "follow_up": {"next_visit": "...", "teleconsult": "...", "lab_tests": "..."}
@@ -868,7 +970,9 @@ function App() {
     try {
       const system =
         "You are a clinical AI. Output ONLY raw JSON matching the requested schema.";
-      const prompt = `Generate an SBAR shift handoff based on these inputs:\n${getPatientContextStr()}\n
+      const prompt = `Act as an expert clinical coordinator. Generate a highly detailed SBAR shift handoff based on these inputs:\n${getPatientContextStr()}\n
+      Make sure the Assessment and Recommendation sections are thorough and reference specific updated vitals.
+      
       Return JSON exactly like this:
       {
         "sbar": {"situation": "...", "background": "...", "assessment": "...", "recommendation": "..."},
@@ -906,6 +1010,28 @@ function App() {
       request: { nurse: nurse.name },
       response: { status: "assigned", time },
     });
+  };
+
+  const shareCarePlanWhatsApp = () => {
+    if (!carePlan) return;
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(
+        buildCarePlanText(selectedPatient, carePlan)
+      )}`,
+      "_blank"
+    );
+  };
+
+  const shareCarePlanTelegram = () => {
+    if (!carePlan) return;
+    window.open(
+      `https://t.me/share/url?url=${encodeURIComponent(
+        "https://careiq.app"
+      )}&text=${encodeURIComponent(
+        buildCarePlanText(selectedPatient, carePlan)
+      )}`,
+      "_blank"
+    );
   };
 
   return (
@@ -1059,7 +1185,6 @@ function App() {
                   >
                     {patient.name}
                   </div>
-                  {/* Re-added Severity Badges */}
                   <span
                     style={{
                       fontSize: 10,
@@ -1245,7 +1370,7 @@ function App() {
                   {isGenerating
                     ? "Processing..."
                     : analysis
-                    ? "Close Analysis"
+                    ? "Re-Analyse Visit"
                     : "Analyse Visit"}
                 </button>
                 <button
@@ -1262,7 +1387,7 @@ function App() {
                   }}
                 >
                   {carePlan
-                    ? "Close 7-Day Care Plan"
+                    ? "Re-Generate Care Plan"
                     : "Generate 7-Day Care Plan"}
                 </button>
                 <button
@@ -1278,7 +1403,7 @@ function App() {
                     background: "#7C3AED",
                   }}
                 >
-                  {handoff ? "Close Shift Handoff" : "Generate Shift Handoff"}
+                  {handoff ? "Re-Generate Handoff" : "Generate Shift Handoff"}
                 </button>
                 <button
                   onClick={loadDemoData}
@@ -1516,6 +1641,22 @@ function App() {
               {carePlan && (
                 <Card
                   title="Generated 7-Day Care Plan"
+                  titleRight={
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <SharePill
+                        label="WhatsApp"
+                        icon="💬"
+                        onClick={shareCarePlanWhatsApp}
+                        bg="#25D366"
+                      />
+                      <SharePill
+                        label="Telegram"
+                        icon="✈️"
+                        onClick={shareCarePlanTelegram}
+                        bg="#0088cc"
+                      />
+                    </div>
+                  }
                   style={{ marginBottom: 14 }}
                 >
                   <div
@@ -1675,9 +1816,19 @@ function App() {
                           >
                             Shift Handoff Successful
                           </div>
-                          <div style={{ fontSize: 13, color: "#047857" }}>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              color: "#047857",
+                              marginTop: 4,
+                            }}
+                          >
                             Assigned to{" "}
-                            <strong>{handoffConfirmation.nurseName}</strong>.
+                            <strong>{handoffConfirmation.nurseName}</strong>.{" "}
+                            <br />
+                            Message automatically shared via WhatsApp (+
+                            {handoffConfirmation.phone}) and Telegram at{" "}
+                            {handoffConfirmation.time}.
                           </div>
                         </div>
                       </div>
