@@ -114,7 +114,7 @@ function vitalStatus(key, v) {
   return "normal";
 }
 
-// ── DYNAMIC DEMO DATA GENERATORS ──
+// ── DYNAMIC DEMO DATA GENERATORS (NOW ALWAYS USED FOR CARE PLAN & HANDOFF) ──
 const generateMockAnalysis = (patient, vitals, notes) => {
   const isCritical = 
     normalizeStatus(vitalStatus("bp_sys", vitals.bp_sys)) === "critical" ||
@@ -158,6 +158,7 @@ const generateMockAnalysis = (patient, vitals, notes) => {
   };
 };
 
+// Hardcoded expert Care Plan generator
 const generateMockCarePlan = (vitals) => ({
   care_plan_title: "Expert 7-Day Stabilization & Care Plan",
   goals: [
@@ -195,17 +196,25 @@ const generateMockCarePlan = (vitals) => ({
   follow_up: { next_visit: "Within 48 hours", teleconsult: "Scheduled for Day 3", lab_tests: "Basic Metabolic Panel" }
 });
 
-const generateMockHandoff = (patient, vitals) => ({
-  sbar: {
-    situation: `Patient ${patient.name} has updated vitals. BP: ${vitals.bp_sys || "--"}/${vitals.bp_dia || "--"}.`,
-    background: `Known conditions: ${patient.conditions.join(', ')}`,
-    assessment: "Review required based on latest inputs.",
-    recommendation: "Please monitor closely."
-  },
-  critical_alerts: vitalStatus("bp_sys", vitals.bp_sys) === "critical" ? [`Critical BP: ${vitals.bp_sys}/${vitals.bp_dia}`] : [],
-  pending_tasks: ["Review latest chart"],
-  family_notes: "No new updates."
-});
+// Hardcoded expert Handoff generator
+const generateMockHandoff = (patient, vitals) => {
+  const isCritical = 
+    normalizeStatus(vitalStatus("bp_sys", vitals.bp_sys)) === "critical" ||
+    normalizeStatus(vitalStatus("bp_dia", vitals.bp_dia)) === "critical" ||
+    normalizeStatus(vitalStatus("spo2", vitals.spo2)) === "critical";
+
+  return {
+    sbar: {
+      situation: `Patient ${patient.name} has updated vitals. BP: ${vitals.bp_sys || "--"}/${vitals.bp_dia || "--"}. Patient requires observation based on recent readings.`,
+      background: `Known conditions: ${patient.conditions.join(', ')}. Age: ${patient.age}. Routine check performed today.`,
+      assessment: isCritical ? "Critical review required based on latest inputs and vital thresholds." : "Routine review completed. Vitals are relatively stable.",
+      recommendation: "Please monitor closely according to the 7-day care plan and report any sudden deterioration."
+    },
+    critical_alerts: isCritical ? [`Critical Vital Sign Detected (BP: ${vitals.bp_sys}/${vitals.bp_dia} | SpO2: ${vitals.spo2})`] : [],
+    pending_tasks: ["Review latest chart and medications", "Validate patient dietary adherence"],
+    family_notes: "Family is aware of the current care plan."
+  };
+};
 
 // ── SHARE FORMATTERS ──
 function buildCarePlanText(patient, plan) {
@@ -215,13 +224,10 @@ function buildCarePlanText(patient, plan) {
   return `*CareIQ — 7-Day Care Plan*\nPatient: ${patient.name} (${patient.id})\nPlan: ${plan.care_plan_title}\n\n*Goals:*\n${goals}\n\n*Schedule:*\n${schedule}\n\n*Patient Education:*\n${edu}\n\n*Follow-Up:*\nNext Visit: ${plan.follow_up?.next_visit}\nTeleconsult: ${plan.follow_up?.teleconsult}\n\n_Sent via CareIQ AI Copilot_`;
 }
 
-// ── CLAUDE API INTEGRATION ──
+// ── CLAUDE API INTEGRATION (ONLY USED FOR ANALYSIS NOW) ──
 const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
   const url = useProxy ? "/api/anthropic/v1/messages" : "https://api.anthropic.com/v1/messages";
   
-  // STRICT GLOBAL JSON RULES FOR CLAUDE
-  const strictSystemPrompt = systemPrompt + "\n\nCRITICAL JSON FORMATTING RULES:\n1. Output ONLY valid, parsable JSON. No markdown backticks (e.g., ```json).\n2. NEVER use double quotes inside string values. Use single quotes ('') instead.\n3. NO unescaped newlines inside strings.\n4. NO trailing commas anywhere in the JSON.";
-
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -231,11 +237,14 @@ const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
       "anthropic-dangerous-direct-browser-access": "true" 
     },
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001", // FIXED: Valid official model
-      max_tokens: 2500,
-      system: strictSystemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-      temperature: 0.1
+      model: "claude-haiku-4-5-20251001", 
+      max_tokens: 3000,
+      system: systemPrompt + "\n\nCRITICAL: Output ONLY valid JSON. No markdown formatting. Ensure all internal strings use single quotes.",
+      messages: [
+        { role: "user", content: userPrompt },
+        { role: "assistant", content: "{" } 
+      ],
+      temperature: 0.0 
     })
   });
 
@@ -248,18 +257,19 @@ const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
   }
 
   const data = await res.json();
-  let raw = data.content[0].text;
+  let raw = "{" + data.content[0].text;
   
-  // AGGRESSIVE JSON EXTRACTION
-  // Cuts out any conversational text Claude might generate around the JSON
   const start = raw.indexOf('{');
   const end = raw.lastIndexOf('}');
   if (start !== -1 && end !== -1) {
     raw = raw.substring(start, end + 1);
   }
 
-  // Cleanup trailing commas just in case
-  raw = raw.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']').trim();
+  raw = raw
+    .replace(/,\s*}/g, '}')
+    .replace(/,\s*]/g, ']')
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, "") 
+    .trim();
 
   try {
     return JSON.parse(raw);
@@ -377,7 +387,10 @@ function App() {
   // AI States
   const [apiKey, setApiKey] = useState("");
   const [useProxy, setUseProxy] = useState(true); // Default to true since user is on Netlify!
-  const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Replaced generic isGenerating with specific isAnalyzing
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
   const [analysisByPatient, setAnalysisByPatient] = useState({});
   const [carePlanByPatient, setCarePlanByPatient] = useState({});
   const [handoffByPatient, setHandoffByPatient] = useState({});
@@ -426,7 +439,7 @@ function App() {
   const getPatientContextStr = () => `
     Patient: ${selectedPatient.name}, ${selectedPatient.age}${selectedPatient.gender}
     Conditions: ${selectedPatient.conditions.join(', ')}
-    Current Vitals Recorded:
+    Current Vitals Recorded (Analyze these specifically):
     - BP: ${vitals.bp_sys}/${vitals.bp_dia} mmHg
     - Pulse: ${vitals.pulse} bpm
     - SpO2: ${vitals.spo2} %
@@ -436,6 +449,7 @@ function App() {
     Nurse Visit Notes: ${notes}
   `;
 
+  // Claude is ONLY used for this Analysis function now
   const runAnalysis = async () => {
     if (analysis) return setAnalysisByPatient((p) => ({ ...p, [selectedPatientId]: null }));
     setErrorMessage("");
@@ -447,7 +461,7 @@ function App() {
       return;
     }
     
-    setIsGenerating(true);
+    setIsAnalyzing(true);
     try {
       const system = "You are a clinical AI. Output ONLY raw JSON matching the requested schema. No markdown formatting.";
       const prompt = `Analyze this patient visit and extract highly detailed clinical insights based EXACTLY on these inputs:\n${getPatientContextStr()}\n
@@ -477,81 +491,23 @@ function App() {
       setErrorMessage(err.message);
       addLog({ actionName: "Analyze Visit (Failed)", status: "error", durationMs: 0, request: {}, response: err.message });
     } finally {
-      setIsGenerating(false);
+      setIsAnalyzing(false);
     }
   };
 
-  const generateCarePlan = async () => {
+  // Hardcoded toggles for Care Plan and Handoff - INSTANT NO API
+  const generateCarePlan = () => {
     if (carePlan) return setCarePlanByPatient((p) => ({ ...p, [selectedPatientId]: null }));
     setErrorMessage("");
-
-    if (!apiKey) {
-      const mockResult = generateMockCarePlan(vitals);
-      setCarePlanByPatient((p) => ({ ...p, [selectedPatientId]: mockResult }));
-      return;
-    }
-    
-    setIsGenerating(true);
-    try {
-      const system = "You are a clinical AI. Output ONLY raw JSON matching the requested schema.";
-      const prompt = `Act as an expert caregiver. Generate a highly detailed, step-by-step 7-day care plan based on these inputs:\n${getPatientContextStr()}\n
-      Make the tasks highly actionable, specific, and broken down step-by-step.
-      CRITICAL: You MUST explicitly cover all 7 days in the daily_schedule array (e.g., "Days 1-2", "Days 3-5", "Days 6-7"). Do not leave out any days.
-      
-      Return JSON exactly like this:
-      {
-        "care_plan_title": "...",
-        "goals": [{"goal": "...", "target": "...", "timeline": "..."}],
-        "daily_schedule": [
-          {"day": "Days 1-2", "tasks": [{"time": "Morning", "task": "Step 1: ... Step 2: ... Step 3: ...", "owner": "nurse|doctor|patient", "notes": "..."}]},
-          {"day": "Days 3-5", "tasks": [{"time": "Afternoon", "task": "Step 1: ...", "owner": "...", "notes": "..."}]},
-          {"day": "Days 6-7", "tasks": [{"time": "Evening", "task": "Step 1: ...", "owner": "...", "notes": "..."}]}
-        ],
-        "monitoring_parameters": [{"parameter": "...", "frequency": "...", "alert_threshold": "..."}],
-        "patient_education": ["..."],
-        "follow_up": {"next_visit": "...", "teleconsult": "...", "lab_tests": "..."}
-      }`;
-
-      const result = await callClaudeAPI(apiKey, useProxy, system, prompt);
-      setCarePlanByPatient((p) => ({ ...p, [selectedPatientId]: result }));
-    } catch (err) {
-      setErrorMessage(err.message);
-    } finally {
-      setIsGenerating(false);
-    }
+    const mockResult = generateMockCarePlan(vitals);
+    setCarePlanByPatient((p) => ({ ...p, [selectedPatientId]: mockResult }));
   };
 
-  const generateHandoff = async () => {
+  const generateHandoff = () => {
     if (handoff) return setHandoffByPatient((p) => ({ ...p, [selectedPatientId]: null }));
     setErrorMessage("");
-
-    if (!apiKey) {
-      const mockResult = generateMockHandoff(selectedPatient, vitals);
-      setHandoffByPatient((p) => ({ ...p, [selectedPatientId]: mockResult }));
-      return;
-    }
-    
-    setIsGenerating(true);
-    try {
-      const system = "You are a clinical AI. Output ONLY raw JSON matching the requested schema.";
-      const prompt = `Act as an expert clinical coordinator. Generate a highly detailed SBAR shift handoff based on these inputs:\n${getPatientContextStr()}\n
-      Make sure the Assessment and Recommendation sections are thorough and reference specific updated vitals.
-      
-      Return JSON exactly like this:
-      {
-        "sbar": {"situation": "...", "background": "...", "assessment": "...", "recommendation": "..."},
-        "critical_alerts": ["..."],
-        "pending_tasks": ["..."],
-        "family_notes": "..."
-      }`;
-
-      const result = await callClaudeAPI(apiKey, useProxy, system, prompt);
-      setHandoffByPatient((p) => ({ ...p, [selectedPatientId]: result }));
-    } catch (err) {
-      setErrorMessage(err.message);
-    } finally {
-      setIsGenerating(false);
-    }
+    const mockResult = generateMockHandoff(selectedPatient, vitals);
+    setHandoffByPatient((p) => ({ ...p, [selectedPatientId]: mockResult }));
   };
 
   const handleHandoffConfirm = (nurse) => {
@@ -663,14 +619,16 @@ function App() {
 
               {/* ACTION BUTTONS */}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-                <button onClick={runAnalysis} disabled={isGenerating} style={{ padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", color: "white", fontWeight: 700, background: COLORS.primary }}>
-                  {isGenerating ? "Processing..." : analysis ? "Re-Analyse Visit" : "Analyse Visit"}
+                {/* Analyzing checks isAnalyzing state */}
+                <button onClick={runAnalysis} disabled={isAnalyzing} style={{ padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", color: "white", fontWeight: 700, background: COLORS.primary }}>
+                  {isAnalyzing ? "Processing..." : analysis ? "Close Analysis" : "Analyse Visit"}
                 </button>
-                <button onClick={generateCarePlan} disabled={isGenerating} style={{ padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", color: "white", fontWeight: 700, background: "#1D4ED8" }}>
-                  {carePlan ? "Re-Generate Care Plan" : "Generate 7-Day Care Plan"}
+                {/* Plan & Handoff are instant, no disabling needed */}
+                <button onClick={generateCarePlan} style={{ padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", color: "white", fontWeight: 700, background: "#1D4ED8" }}>
+                  {carePlan ? "Close 7-Day Care Plan" : "Generate 7-Day Care Plan"}
                 </button>
-                <button onClick={generateHandoff} disabled={isGenerating} style={{ padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", color: "white", fontWeight: 700, background: "#7C3AED" }}>
-                  {handoff ? "Re-Generate Handoff" : "Generate Shift Handoff"}
+                <button onClick={generateHandoff} style={{ padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", color: "white", fontWeight: 700, background: "#7C3AED" }}>
+                  {handoff ? "Close Shift Handoff" : "Generate Shift Handoff"}
                 </button>
                 <button onClick={loadDemoData} style={{ padding: "10px 18px", borderRadius: 10, border: `2px solid ${COLORS.primary}`, cursor: "pointer", color: COLORS.primary, fontWeight: 700, background: "white" }}>
                   Load Demo Data
@@ -810,7 +768,7 @@ function App() {
                 </label>
                 <p style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 6 }}>
                   <strong>Check this ON if deployed to Netlify</strong> (with the <code>_redirects</code> file configured). <br/>
-                  <strong>Keep this OFF if testing locally or in sandbox</strong> (hits <code>[https://api.anthropic.com](https://api.anthropic.com)...</code> directly, but requires a CORS browser extension).
+                  <strong>Keep this OFF if testing locally or in sandbox</strong> (hits <code>https://api.anthropic.com...</code> directly, but requires a CORS browser extension).
                 </p>
               </div>
 
@@ -821,7 +779,7 @@ function App() {
 {`// 1. In your 'public' folder, create a file named '_redirects' (no extension)
 // 2. Paste this exact line into the file:
 
-/api/anthropic/* [https://api.anthropic.com/:splat](https://api.anthropic.com/:splat)  200
+/api/anthropic/* https://api.anthropic.com/:splat  200
 
 // 3. Run 'npm run build' and upload the 'dist' folder to Netlify.`}
                 </pre>
