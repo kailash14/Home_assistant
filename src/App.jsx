@@ -231,7 +231,7 @@ const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
       "anthropic-dangerous-direct-browser-access": "true" 
     },
     body: JSON.stringify({
-      model: "claude-3-haiku-20240307", // FIXED: Valid official model
+      model: "claude-3-5-haiku-20241022", // FIXED: Valid official model
       max_tokens: 2500,
       system: strictSystemPrompt,
       messages: [{ role: "user", content: userPrompt }],
