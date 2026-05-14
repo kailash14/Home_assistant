@@ -219,6 +219,9 @@ function buildCarePlanText(patient, plan) {
 const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
   const url = useProxy ? "/api/anthropic/v1/messages" : "https://api.anthropic.com/v1/messages";
   
+  // STRICT GLOBAL JSON RULES FOR CLAUDE
+  const strictSystemPrompt = systemPrompt + "\n\nCRITICAL JSON FORMATTING RULES:\n1. Output ONLY valid, parsable JSON. No markdown backticks (e.g., ```json).\n2. NEVER use double quotes inside string values. Use single quotes ('') instead.\n3. NO unescaped newlines inside strings.\n4. NO trailing commas anywhere in the JSON.";
+
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -228,9 +231,9 @@ const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
       "anthropic-dangerous-direct-browser-access": "true" 
     },
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001", 
-      max_tokens: 2000,
-      system: systemPrompt,
+      model: "claude-3-5-haiku-20241022", // FIXED: Valid official model
+      max_tokens: 2500,
+      system: strictSystemPrompt,
       messages: [{ role: "user", content: userPrompt }],
       temperature: 0.1
     })
@@ -245,21 +248,25 @@ const callClaudeAPI = async (apiKey, useProxy, systemPrompt, userPrompt) => {
   }
 
   const data = await res.json();
-  const text = data.content[0].text;
+  let raw = data.content[0].text;
   
- const fence = String.fromCharCode(96, 96, 96);
- const jsonMatchRegex = new RegExp(fence + "(?:json)?\\n([\\s\\S]*?)\\n" + fence);
- const fallbackRegex = /\{[\s\S]*\}/;
- const match = text.match(jsonMatchRegex) || text.match(fallbackRegex);
- let raw = match ? (match[1] || match[0]) : text;
+  // AGGRESSIVE JSON EXTRACTION
+  // Cuts out any conversational text Claude might generate around the JSON
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start !== -1 && end !== -1) {
+    raw = raw.substring(start, end + 1);
+  }
 
-// Clean common JSON issues from model output
-raw = raw
-  .replace(/,\s*}/g, '}')
-  .replace(/,\s*]/g, ']')
-  .trim();
+  // Cleanup trailing commas just in case
+  raw = raw.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']').trim();
 
-return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("RAW JSON ERROR:", raw);
+    throw new Error("Claude generated malformed JSON. Please click Generate again.");
+  }
 };
 
 // ── COMPONENTS ──
@@ -419,7 +426,7 @@ function App() {
   const getPatientContextStr = () => `
     Patient: ${selectedPatient.name}, ${selectedPatient.age}${selectedPatient.gender}
     Conditions: ${selectedPatient.conditions.join(', ')}
-    Current Vitals Recorded (Analyze these specifically):
+    Current Vitals Recorded:
     - BP: ${vitals.bp_sys}/${vitals.bp_dia} mmHg
     - Pulse: ${vitals.pulse} bpm
     - SpO2: ${vitals.spo2} %
@@ -474,7 +481,7 @@ function App() {
     }
   };
 
- const generateCarePlan = async () => {
+  const generateCarePlan = async () => {
     if (carePlan) return setCarePlanByPatient((p) => ({ ...p, [selectedPatientId]: null }));
     setErrorMessage("");
 
@@ -486,13 +493,12 @@ function App() {
     
     setIsGenerating(true);
     try {
-      const system = "You are a clinical AI. Output ONLY raw JSON matching the requested schema. CRITICAL JSON RULES: 1. Do NOT use double quotes inside your text values. Use single quotes ('') instead to prevent breaking the JSON. 2. Ensure every object in an array is properly separated by a comma. 3. Do not include trailing commas.";
-      
+      const system = "You are a clinical AI. Output ONLY raw JSON matching the requested schema.";
       const prompt = `Act as an expert caregiver. Generate a highly detailed, step-by-step 7-day care plan based on these inputs:\n${getPatientContextStr()}\n
       Make the tasks highly actionable, specific, and broken down step-by-step.
       CRITICAL: You MUST explicitly cover all 7 days in the daily_schedule array (e.g., "Days 1-2", "Days 3-5", "Days 6-7"). Do not leave out any days.
       
-      Return JSON exactly like this without any markdown formatting:
+      Return JSON exactly like this:
       {
         "care_plan_title": "...",
         "goals": [{"goal": "...", "target": "...", "timeline": "..."}],
@@ -804,7 +810,7 @@ function App() {
                 </label>
                 <p style={{ fontSize: 12, color: COLORS.textMuted, marginTop: 6 }}>
                   <strong>Check this ON if deployed to Netlify</strong> (with the <code>_redirects</code> file configured). <br/>
-                  <strong>Keep this OFF if testing locally or in sandbox</strong> (hits <code>https://api.anthropic.com...</code> directly, but requires a CORS browser extension).
+                  <strong>Keep this OFF if testing locally or in sandbox</strong> (hits <code>[https://api.anthropic.com](https://api.anthropic.com)...</code> directly, but requires a CORS browser extension).
                 </p>
               </div>
 
@@ -815,7 +821,7 @@ function App() {
 {`// 1. In your 'public' folder, create a file named '_redirects' (no extension)
 // 2. Paste this exact line into the file:
 
-/api/anthropic/* https://api.anthropic.com/:splat  200
+/api/anthropic/* [https://api.anthropic.com/:splat](https://api.anthropic.com/:splat)  200
 
 // 3. Run 'npm run build' and upload the 'dist' folder to Netlify.`}
                 </pre>
